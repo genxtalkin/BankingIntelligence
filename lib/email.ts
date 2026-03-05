@@ -1,7 +1,10 @@
 import { Resend } from 'resend';
 import { UserProfile } from '@/types';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Lazy-initialize so the build doesn't crash when RESEND_API_KEY is unset
+function getResend() {
+  return new Resend(process.env.RESEND_API_KEY);
+}
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://localhost:3000';
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'genxtalkin@gmail.com';
@@ -77,7 +80,7 @@ export async function sendAdminApprovalEmail(
   `;
 
   try {
-    await resend.emails.send({
+    await getResend().emails.send({
       from: FROM_EMAIL,
       to: [ADMIN_EMAIL],
       subject: `[Verint FI Intel] New Access Request: ${user.first_name} ${user.last_name}`,
@@ -140,7 +143,7 @@ export async function sendUserApprovedEmail(
   `;
 
   try {
-    await resend.emails.send({
+    await getResend().emails.send({
       from: FROM_EMAIL,
       to: [user.email],
       subject: `[Verint FI Intel] Your Account Has Been Approved!`,
@@ -173,7 +176,7 @@ export async function sendUserDeniedEmail(user: UserProfile): Promise<void> {
   `;
 
   try {
-    await resend.emails.send({
+    await getResend().emails.send({
       from: FROM_EMAIL,
       to: [user.email],
       subject: `[Verint FI Intel] Access Request Update`,

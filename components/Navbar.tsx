@@ -37,10 +37,17 @@ export default function Navbar() {
 
   const handleRefresh = async () => {
     setRefreshState('sent');
-    // Fire and forget — cron job can take several minutes
-    fetch('/api/refresh', { method: 'POST' }).catch(() => {});
-    // Reset button after 6 minutes (max cron duration)
-    setTimeout(() => setRefreshState('idle'), 6 * 60 * 1000);
+    try {
+      // Await the full refresh — the server runs data collection and DB writes,
+      // then returns. maxDuration = 300s on the route (requires Vercel Pro).
+      await fetch('/api/refresh', { method: 'POST' });
+    } catch {
+      // Network error or timeout — still reset so the user can retry
+    } finally {
+      setRefreshState('idle');
+      // Reload the current page so fresh data appears immediately
+      window.location.reload();
+    }
   };
 
   const isActive = (href: string) =>

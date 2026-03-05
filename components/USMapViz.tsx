@@ -121,7 +121,7 @@ export default function USMapViz({ words }: Props) {
             map[String(parseInt(g.id, 10))] = g.properties.name;
           });
           return map;
-        }).catch(() => ({}));
+        }).catch(() => ({} as Record<string, string>));
 
         // ─── State fills ──────────────────────────────────────────────────────
         svg

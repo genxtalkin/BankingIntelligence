@@ -43,6 +43,11 @@ const STATE_RISK_SEED: Record<string, number> = {
   'VA': 5, 'TN': 4, 'MO': 4, 'MN': 4, 'IN': 3, 'MA': 3,
 };
 
+// Typed feature shape from TopoJSON states
+interface GeoFeature {
+  id: string;
+}
+
 export default function USMapViz({ words }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [stateData, setStateData] = useState<Record<string, StateData>>({});
@@ -68,12 +73,7 @@ export default function USMapViz({ words }: Props) {
         .slice(0, 5)
         .map((w) => w.word);
 
-      data[abbr] = {
-        name,
-        abbr,
-        count: seedCount,
-        topWords,
-      };
+      data[abbr] = { name, abbr, count: seedCount, topWords };
     });
 
     setStateData(data);
@@ -100,12 +100,14 @@ export default function USMapViz({ words }: Props) {
           .scale(width * 1.28)
           .translate([width / 2, height / 2]);
 
-        const path = d3.geoPath().projection(projection);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const path = d3.geoPath().projection(projection as any);
 
-        // @ts-expect-error topojson types
-        const statesFeature = topojson.feature(topoData, topoData.objects.states);
-        // @ts-expect-error d3-geo types
-        const features = statesFeature.features;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const topo = topoData as any;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const statesFeature = topojson.feature(topo, topo.objects.states) as any;
+        const features: GeoFeature[] = statesFeature.features;
 
         const maxCount = Math.max(...Object.values(stateData).map((s) => s.count), 1);
         const colorScale = d3.scaleSequential(d3.interpolatePurples).domain([0, maxCount]);
@@ -121,15 +123,16 @@ export default function USMapViz({ words }: Props) {
           return map;
         }).catch(() => ({}));
 
+        // ─── State fills ──────────────────────────────────────────────────────
         svg
-          .selectAll('path')
+          .selectAll<SVGPathElement, GeoFeature>('path')
           .data(features)
           .enter()
           .append('path')
-          // @ts-expect-error d3 path call
-          .attr('d', path)
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          .attr('d', (d) => path(d as any) ?? '')
           .attr('class', 'state-path')
-          .attr('fill', (d: { id: string }) => {
+          .attr('fill', (d) => {
             const fipsId = String(parseInt(d.id, 10));
             const stateName = fipsToName[fipsId] || '';
             const abbr = STATE_ABBR[stateName] || '';
@@ -138,7 +141,7 @@ export default function USMapViz({ words }: Props) {
           })
           .attr('stroke', '#FFFFFF')
           .attr('stroke-width', 0.8)
-          .on('mouseover', function (event: MouseEvent, d: { id: string }) {
+          .on('mouseover', function (event: MouseEvent, d) {
             const fipsId = String(parseInt(d.id, 10));
             const stateName = fipsToName[fipsId] || 'Unknown';
             const abbr = STATE_ABBR[stateName] || '';
@@ -160,21 +163,21 @@ export default function USMapViz({ words }: Props) {
             d3.select(this).attr('stroke-width', 0.8).attr('stroke', '#FFFFFF');
           });
 
-        // State labels
+        // ─── State labels ─────────────────────────────────────────────────────
         svg
-          .selectAll('text')
+          .selectAll<SVGTextElement, GeoFeature>('text')
           .data(features)
           .enter()
           .append('text')
-          // @ts-expect-error d3 path centroid
-          .attr('x', (d) => path.centroid(d)[0])
-          // @ts-expect-error d3 path centroid
-          .attr('y', (d) => path.centroid(d)[1])
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          .attr('x', (d) => (path.centroid(d as any) || [0, 0])[0])
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          .attr('y', (d) => (path.centroid(d as any) || [0, 0])[1])
           .attr('text-anchor', 'middle')
           .attr('dominant-baseline', 'middle')
           .attr('font-size', '8')
           .attr('font-weight', '600')
-          .attr('fill', (d: { id: string }) => {
+          .attr('fill', (d) => {
             const fipsId = String(parseInt(d.id, 10));
             const stateName = fipsToName[fipsId] || '';
             const abbr = STATE_ABBR[stateName] || '';
@@ -182,7 +185,7 @@ export default function USMapViz({ words }: Props) {
             return count >= maxCount * 0.6 ? 'white' : '#4A1870';
           })
           .attr('pointer-events', 'none')
-          .text((d: { id: string }) => {
+          .text((d) => {
             const fipsId = String(parseInt(d.id, 10));
             const stateName = fipsToName[fipsId] || '';
             return STATE_ABBR[stateName] || '';

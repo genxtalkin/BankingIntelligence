@@ -11,26 +11,22 @@ interface RSSItem {
   summary?: string;
 }
 
-interface RSSFeed {
-  items: RSSItem[];
-}
-
 const RSS_FEEDS = [
   {
     url: 'https://krebsonsecurity.com/feed/',
     source: 'KrebsOnSecurity',
   },
   {
-    url: 'https://www.fsisac.com/rss.xml',
-    source: 'FS-ISAC',
-  },
-  {
     url: 'https://feeds.feedburner.com/TheHackersNews',
     source: 'The Hacker News',
   },
   {
-    url: 'https://www.bankinfosecurity.com/rss-feeds',
-    source: 'BankInfoSecurity',
+    url: 'https://isc.sans.edu/rssfeed.xml',
+    source: 'SANS ISC',
+  },
+  {
+    url: 'https://feeds.feedburner.com/Securityweek',
+    source: 'SecurityWeek',
   },
 ];
 
@@ -45,57 +41,79 @@ function isRelevant(text: string): boolean {
   return RELEVANCE_KEYWORDS.some((kw) => lower.includes(kw));
 }
 
-export async function fetchFromRSS(
-  daysBack = 30
+/** Fetch a single feed with a hard timeout. Returns [] on any failure. */
+async function fetchFeed(
+  feed: { url: string; source: string },
+  cutoffDate: Date,
+  timeoutMs = 8000
 ): Promise<NewsArticle[]> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const res = await fetch(feed.url, {
+      headers: { 'User-Agent': 'Verint-FI-Intel/1.0' },
+      signal: controller.signal,
+      next: { revalidate: 0 },
+    });
+
+    if (!res.ok) {
+      console.warn(`[RSS] ${feed.source} returned ${res.status}`);
+      return [];
+    }
+
+    const xml = await res.text();
+    const items = parseRSSXML(xml);
+    const articles: NewsArticle[] = [];
+
+    for (const item of items) {
+      if (!item.title || !item.link) continue;
+
+      const pubDate = item.pubDate || item.isoDate;
+      const publishedAt = pubDate ? new Date(pubDate) : null;
+
+      if (publishedAt && publishedAt < cutoffDate) continue;
+
+      const rawContent = item.contentSnippet || item.content || item.summary || item.title;
+      const cleaned = stripHtml(rawContent || '');
+
+      const combinedText = `${item.title} ${cleaned}`;
+      if (!isRelevant(combinedText)) continue;
+
+      articles.push({
+        title: item.title,
+        url: item.link,
+        source: feed.source,
+        content: truncateToWords(cleaned, 150),
+        publishedAt: publishedAt?.toISOString() || null,
+        keywords: [],
+      });
+    }
+
+    console.log(`[RSS] ${feed.source}: ${articles.length} relevant articles`);
+    return articles;
+  } catch (err) {
+    const isTimeout = err instanceof Error && err.name === 'AbortError';
+    console.warn(`[RSS] ${feed.source} ${isTimeout ? 'timed out' : 'failed'}:`, isTimeout ? '' : err);
+    return [];
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function fetchFromRSS(daysBack = 30): Promise<NewsArticle[]> {
   const cutoffDate = new Date();
   cutoffDate.setDate(cutoffDate.getDate() - daysBack);
 
+  // Fetch all feeds in parallel — much faster than sequential
+  const results = await Promise.allSettled(
+    RSS_FEEDS.map((feed) => fetchFeed(feed, cutoffDate))
+  );
+
   const allArticles: NewsArticle[] = [];
-
-  for (const feed of RSS_FEEDS) {
-    try {
-      // Use a lightweight fetch + XML parse approach (no external library needed at runtime)
-      const res = await fetch(feed.url, {
-        headers: { 'User-Agent': 'Verint-FI-Intel/1.0' },
-        next: { revalidate: 3600 },
-      });
-
-      if (!res.ok) {
-        console.warn(`[RSS] ${feed.source} returned ${res.status}`);
-        continue;
-      }
-
-      const xml = await res.text();
-      const items = parseRSSXML(xml);
-
-      for (const item of items) {
-        if (!item.title || !item.link) continue;
-
-        const pubDate = item.pubDate || item.isoDate;
-        const publishedAt = pubDate ? new Date(pubDate) : null;
-
-        // Filter by date
-        if (publishedAt && publishedAt < cutoffDate) continue;
-
-        const rawContent = item.contentSnippet || item.content || item.summary || item.title;
-        const cleaned = stripHtml(rawContent || '');
-
-        // Only include relevant articles
-        const combinedText = `${item.title} ${cleaned}`;
-        if (!isRelevant(combinedText)) continue;
-
-        allArticles.push({
-          title: item.title,
-          url: item.link,
-          source: feed.source,
-          content: truncateToWords(cleaned, 150),
-          publishedAt: publishedAt?.toISOString() || null,
-          keywords: [],
-        });
-      }
-    } catch (err) {
-      console.warn(`[RSS] Error fetching ${feed.source}:`, err);
+  for (const result of results) {
+    if (result.status === 'fulfilled') {
+      allArticles.push(...result.value);
     }
   }
 
@@ -105,18 +123,25 @@ export async function fetchFromRSS(
 function parseRSSXML(xml: string): RSSItem[] {
   const items: RSSItem[] = [];
 
-  // Simple regex-based XML parsing (avoids needing xml2js at runtime)
-  const itemMatches = xml.match(/<item>([\s\S]*?)<\/item>/g) || [];
+  // Match both RSS <item> and Atom <entry> elements
+  const itemMatches =
+    xml.match(/<item>([\s\S]*?)<\/item>/g) ||
+    xml.match(/<entry>([\s\S]*?)<\/entry>/g) ||
+    [];
 
   for (const itemXml of itemMatches) {
     const title = extractTag(itemXml, 'title');
     const link = extractTag(itemXml, 'link') || extractAtomLink(itemXml);
-    const pubDate = extractTag(itemXml, 'pubDate') || extractTag(itemXml, 'published');
+    const pubDate =
+      extractTag(itemXml, 'pubDate') ||
+      extractTag(itemXml, 'published') ||
+      extractTag(itemXml, 'updated');
     const contentSnippet =
-      extractTag(itemXml, 'description') ||
       extractCDATA(itemXml, 'description') ||
+      extractTag(itemXml, 'description') ||
       extractTag(itemXml, 'content:encoded') ||
-      extractTag(itemXml, 'summary');
+      extractTag(itemXml, 'summary') ||
+      extractTag(itemXml, 'content');
 
     if (title || link) {
       items.push({ title, link, pubDate, contentSnippet });
@@ -129,9 +154,7 @@ function parseRSSXML(xml: string): RSSItem[] {
 function extractTag(xml: string, tag: string): string {
   const match = xml.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'i'));
   if (!match) return '';
-  return match[1]
-    .replace(/<!\[CDATA\[|\]\]>/g, '')
-    .trim();
+  return match[1].replace(/<!\[CDATA\[|\]\]>/g, '').trim();
 }
 
 function extractCDATA(xml: string, tag: string): string {

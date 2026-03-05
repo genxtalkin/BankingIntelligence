@@ -41,8 +41,12 @@ export async function fetchFromGDELT(
     sourcelang: 'English',
   });
 
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 10000); // 10s timeout
+
   try {
     const res = await fetch(`${GDELT_BASE}?${params.toString()}`, {
+      signal: controller.signal,
       next: { revalidate: 0 },
     });
 
@@ -69,8 +73,11 @@ export async function fetchFromGDELT(
       keywords: [],
     }));
   } catch (err) {
-    console.error('[GDELT] Fetch error:', err);
+    const isTimeout = err instanceof Error && err.name === 'AbortError';
+    console.error(`[GDELT] ${isTimeout ? 'Timed out' : 'Fetch error'}:`, isTimeout ? '' : err);
     return [];
+  } finally {
+    clearTimeout(timer);
   }
 }
 

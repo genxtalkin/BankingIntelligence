@@ -4,17 +4,7 @@ All application files are complete. Follow these steps to deploy.
 
 ---
 
-## Step 1 — Get a Free Resend API Key (5 minutes)
-
-1. Go to **https://resend.com** and sign up for free
-2. In your dashboard → **API Keys** → click **"Create API Key"**
-3. Copy the key (it starts with `re_`)
-4. (Optional but recommended) Add and verify your domain so emails come from `@yourdomain.com`
-   - Until then, emails will come from `onboarding@resend.dev` and can only be sent to verified addresses
-
----
-
-## Step 2 — Install Dependencies
+## Step 1 — Install Dependencies
 
 Open a terminal, `cd` into this project folder (`BankingIntelligenceProject`), then run:
 
@@ -24,7 +14,7 @@ npm install
 
 ---
 
-## Step 3 — Deploy to Vercel
+## Step 2 — Deploy to Vercel
 
 ### Option A — Vercel CLI (Recommended)
 
@@ -52,7 +42,7 @@ Follow the prompts:
 
 ---
 
-## Step 4 — Set Environment Variables in Vercel
+## Step 3 — Set Environment Variables in Vercel
 
 After your first deployment, go to:
 **Vercel Dashboard → Your Project → Settings → Environment Variables**
@@ -65,7 +55,7 @@ Add ALL of these:
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | `<your-supabase-anon-key>` |
 | `SUPABASE_SERVICE_ROLE_KEY` | `<your-supabase-service-role-key>` |
 | `NEWSCATCHER_API_KEY` | `<your-newscatcher-api-key>` |
-| `RESEND_API_KEY` | `re_YOUR_KEY_FROM_STEP_1` |
+| `RESEND_API_KEY` | `<your-resend-api-key>` |
 | `ADMIN_EMAIL` | `genxtalkin@gmail.com` |
 | `CRON_SECRET` | Generate any random string (e.g. `openssl rand -hex 32`) |
 | `NEXT_PUBLIC_APP_URL` | Your Vercel URL (e.g. `https://verint-fi-intel.vercel.app`) |
@@ -74,7 +64,7 @@ After adding all variables, click **"Redeploy"** so the app picks them up.
 
 ---
 
-## Step 5 — Trigger the First Data Refresh
+## Step 4 — Trigger the First Data Refresh
 
 Once deployed, hit the cron endpoint once manually to populate the database:
 
@@ -93,7 +83,7 @@ This will fetch articles from all sources and populate the Mind Cloud, Word Map,
 
 ---
 
-## Step 6 — Verify Cron Schedule
+## Step 5 — Verify Cron Schedule
 
 In **Vercel Dashboard → Your Project → Settings → Cron Jobs**, confirm:
 - Path: `/api/cron/refresh-data`
@@ -112,7 +102,7 @@ In **Vercel Dashboard → Your Project → Settings → Cron Jobs**, confirm:
 | Word Map (US incident heat map) | ✅ Ready — populates on first cron run |
 | Market Trends (top 20 articles) | ✅ Ready — populates on first cron run |
 | User Signup form | ✅ Ready |
-| Admin approval emails via Resend | ✅ Ready (needs Resend key) |
+| Admin approval emails via Resend | ✅ Ready |
 | User approval → auto-creates Supabase login | ✅ Ready |
 | Daily 5 AM ET refresh | ✅ Ready via Vercel Cron |
 | GXT logo in navbar | ✅ Done |

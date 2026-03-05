@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import Image from 'next/image';
 
 const FEATURES = [
   {
@@ -11,16 +10,6 @@ const FEATURES = [
       'in the last 30 days. Sized by frequency, color-coded by category.',
     badge: '30-day view',
     color: 'from-verint-purple to-verint-purple-light',
-  },
-  {
-    href: '/word-map',
-    icon: '🗺️',
-    title: 'Word Map',
-    description:
-      'US geographic heat map showing incident density by state, overlaid with trending ' +
-      'security keywords. Identify your highest-risk sales territories at a glance.',
-    badge: '30-day view',
-    color: 'from-verint-purple-dark to-verint-purple',
   },
   {
     href: '/market-trends',
@@ -47,11 +36,6 @@ export default function HomePage() {
       {/* Hero */}
       <section className="bg-verint-gradient text-white py-20 px-4">
         <div className="max-w-4xl mx-auto text-center">
-          <div className="flex justify-center mb-6">
-            <div className="relative w-20 h-20 rounded-full overflow-hidden ring-4 ring-white ring-opacity-30 shadow-2xl">
-              <Image src="/gxt-logo.svg" alt="GXT Logo" fill sizes="80px" className="object-cover" priority />
-            </div>
-          </div>
           <div className="inline-flex items-center gap-2 bg-white bg-opacity-15 rounded-full
                           px-4 py-1.5 text-sm font-medium mb-6 border border-white border-opacity-20">
             <span className="w-2 h-2 rounded-full bg-green-400 live-pulse" />
@@ -96,9 +80,9 @@ export default function HomePage() {
             Intelligence Tools
           </h2>
           <p className="text-center text-gray-500 mb-10 text-sm">
-            Three views of the same market — choose your lens
+            Two views of the same market — choose your lens
           </p>
-          <div className="grid md:grid-cols-3 gap-6">
+          <div className="grid md:grid-cols-2 gap-6 max-w-3xl mx-auto">
             {FEATURES.map((f) => (
               <Link
                 key={f.href}

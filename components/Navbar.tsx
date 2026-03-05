@@ -18,9 +18,11 @@ export default function Navbar() {
   const pathname = usePathname();
   const [user, setUser] = useState<User | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const supabase = createClient();
 
+  // Create client inside useEffect only — avoids SSR prerender crash
+  // when NEXT_PUBLIC_SUPABASE_URL is not yet set in the build environment
   useEffect(() => {
+    const supabase = createClient();
     const { data: listener } = supabase.auth.onAuthStateChange((_e, session) => {
       setUser(session?.user ?? null);
     });
@@ -29,6 +31,7 @@ export default function Navbar() {
   }, []);
 
   const handleLogout = async () => {
+    const supabase = createClient();
     await supabase.auth.signOut();
     window.location.href = '/';
   };

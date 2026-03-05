@@ -1,0 +1,39 @@
+{
+  "name": "verint-fi-intel",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "next": "14.2.5",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "@supabase/supabase-js": "^2.45.4",
+    "@supabase/ssr": "^0.5.1",
+    "resend": "^4.0.1",
+    "date-fns": "^3.6.0",
+    "d3": "^7.9.0",
+    "topojson-client": "^3.1.0",
+    "rss-parser": "^3.13.0",
+    "uuid": "^10.0.0",
+    "cheerio": "^1.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "@types/node": "^20.14.0",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@types/d3": "^7.4.3",
+    "@types/topojson-client": "^3.1.4",
+    "@types/uuid": "^10.0.0",
+    "tailwindcss": "^3.4.7",
+    "autoprefixer": "^10.4.19",
+    "postcss": "^8.4.39",
+    "eslint": "^8.57.0",
+    "eslint-config-next": "14.2.5"
+  }
+}

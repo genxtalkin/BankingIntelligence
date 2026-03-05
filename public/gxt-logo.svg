@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <!-- Dark navy circle background -->
+  <circle cx="60" cy="60" r="58" fill="#0D1B3E" />
+
+  <!-- Crossed red arrows (X pattern) -->
+  <!-- Arrow 1: top-left to bottom-right -->
+  <line x1="22" y1="22" x2="98" y2="98" stroke="#CC2222" stroke-width="3.5" stroke-linecap="round"/>
+  <!-- Arrowhead top-left -->
+  <polygon points="22,22 32,22 22,32" fill="#CC2222"/>
+  <!-- Arrowhead bottom-right -->
+  <polygon points="98,98 88,98 98,88" fill="#CC2222"/>
+  <!-- Arrow 2: top-right to bottom-left -->
+  <line x1="98" y1="22" x2="22" y2="98" stroke="#CC2222" stroke-width="3.5" stroke-linecap="round"/>
+  <!-- Arrowhead top-right -->
+  <polygon points="98,22 88,22 98,32" fill="#CC2222"/>
+  <!-- Arrowhead bottom-left -->
+  <polygon points="22,98 32,98 22,88" fill="#CC2222"/>
+
+  <!-- Feathered tails -->
+  <!-- TL feathers -->
+  <line x1="22" y1="22" x2="30" y2="26" stroke="#CC2222" stroke-width="2"/>
+  <line x1="22" y1="22" x2="26" y2="30" stroke="#CC2222" stroke-width="2"/>
+  <!-- TR feathers -->
+  <line x1="98" y1="22" x2="90" y2="26" stroke="#CC2222" stroke-width="2"/>
+  <line x1="98" y1="22" x2="94" y2="30" stroke="#CC2222" stroke-width="2"/>
+  <!-- BR feathers -->
+  <line x1="98" y1="98" x2="90" y2="94" stroke="#CC2222" stroke-width="2"/>
+  <line x1="98" y1="98" x2="94" y2="90" stroke="#CC2222" stroke-width="2"/>
+  <!-- BL feathers -->
+  <line x1="22" y1="98" x2="30" y2="94" stroke="#CC2222" stroke-width="2"/>
+  <line x1="22" y1="98" x2="26" y2="90" stroke="#CC2222" stroke-width="2"/>
+
+  <!-- G - left -->
+  <text x="18" y="72" font-family="Arial, sans-serif" font-size="26" font-weight="bold"
+        fill="white" opacity="0.95">G</text>
+
+  <!-- T - right -->
+  <text x="81" y="72" font-family="Arial, sans-serif" font-size="26" font-weight="bold"
+        fill="white" opacity="0.95">T</text>
+
+  <!-- Hiker silhouette at bottom center -->
+  <g transform="translate(52, 62) scale(0.55)" fill="white">
+    <!-- Head -->
+    <circle cx="16" cy="4" r="4" />
+    <!-- Body -->
+    <line x1="16" y1="8" x2="16" y2="22" stroke="white" stroke-width="3" stroke-linecap="round"/>
+    <!-- Left arm with pole -->
+    <line x1="16" y1="12" x2="6" y2="20" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="6" y1="20" x2="2" y2="30" stroke="white" stroke-width="2" stroke-linecap="round"/>
+    <!-- Right arm -->
+    <line x1="16" y1="12" x2="26" y2="18" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+    <!-- Left leg -->
+    <line x1="16" y1="22" x2="8" y2="34" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+    <!-- Right leg (stepped forward) -->
+    <line x1="16" y1="22" x2="24" y2="34" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+    <!-- Backpack -->
+    <rect x="18" y="9" width="6" height="9" rx="2" fill="white" opacity="0.8"/>
+  </g>
+
+  <!-- Outer ring -->
+  <circle cx="60" cy="60" r="57" fill="none" stroke="#1a2a55" stroke-width="2"/>
+</svg>

@@ -13,7 +13,10 @@ export async function GET() {
     .single();
 
   if (!latestBatch) {
-    return NextResponse.json({ words: [], batchDate: null });
+    return NextResponse.json(
+      { words: [], batchDate: null },
+      { headers: { 'Cache-Control': 'no-store' } }
+    );
   }
 
   const { data: words, error } = await supabase
@@ -28,8 +31,8 @@ export async function GET() {
     return NextResponse.json({ error: 'Failed to fetch word data' }, { status: 500 });
   }
 
-  return NextResponse.json({
-    words: words || [],
-    batchDate: latestBatch.batch_date,
-  });
+  return NextResponse.json(
+    { words: words || [], batchDate: latestBatch.batch_date },
+    { headers: { 'Cache-Control': 'no-store' } }
+  );
 }

@@ -74,7 +74,8 @@ export async function fetchFromGDELT(
     }));
   } catch (err) {
     const isTimeout = err instanceof Error && err.name === 'AbortError';
-    console.error(`[GDELT] ${isTimeout ? 'Timed out' : 'Fetch error'}:`, isTimeout ? '' : err);
+    // Use warn not error — 429 rate limiting is expected and non-fatal
+    console.warn(`[GDELT] ${isTimeout ? 'Timed out' : 'Unavailable'}:`, isTimeout ? '(timeout)' : String(err));
     return [];
   } finally {
     clearTimeout(timer);

@@ -13,7 +13,10 @@ export async function GET() {
     .single();
 
   if (!latestBatch) {
-    return NextResponse.json({ trends: [], batchDate: null });
+    return NextResponse.json(
+      { trends: [], batchDate: null },
+      { headers: { 'Cache-Control': 'no-store' } }
+    );
   }
 
   const { data: trends, error } = await supabase
@@ -28,8 +31,8 @@ export async function GET() {
     return NextResponse.json({ error: 'Failed to fetch trends' }, { status: 500 });
   }
 
-  return NextResponse.json({
-    trends: trends || [],
-    batchDate: latestBatch.batch_date,
-  });
+  return NextResponse.json(
+    { trends: trends || [], batchDate: latestBatch.batch_date },
+    { headers: { 'Cache-Control': 'no-store' } }
+  );
 }

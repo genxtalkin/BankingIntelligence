@@ -83,12 +83,15 @@ export default function MindCloudPage() {
         </div>
       )}
 
-      {/* Main content: word cloud + optional info panel */}
+      {/* Main content: word cloud + stats. Right padding opens space for the fixed InfoPanel. */}
       {!loading && !error && words.length > 0 && (
         <div className="flex flex-1 overflow-hidden">
 
           {/* Left column: word cloud + stats */}
-          <div className="flex-1 overflow-y-auto px-6 pb-10 min-w-0">
+          <div
+            className="flex-1 overflow-y-auto px-6 pb-10 min-w-0 transition-all duration-200"
+            style={{ paddingRight: selectedWord ? `calc(1.5rem + ${400}px)` : '1.5rem' }}
+          >
             <WordCloudViz
               words={words}
               width={960}
@@ -178,15 +181,14 @@ export default function MindCloudPage() {
             </div>
           </div>
 
-          {/* Right column: info panel (renders when a word is selected) */}
-          {selectedWord && (
-            <InfoPanel
-              word={selectedWord}
-              onClose={() => setSelectedWord(null)}
-            />
-          )}
         </div>
       )}
+
+      {/* InfoPanel — fixed side drawer, outside the scroll flow */}
+      <InfoPanel
+        word={selectedWord}
+        onClose={() => setSelectedWord(null)}
+      />
     </div>
   );
 }

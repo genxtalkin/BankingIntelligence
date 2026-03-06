@@ -102,24 +102,34 @@ Guidelines:
     },
   };
 
+  // gemini-1.5-flash is universally available on all API key tiers
+  const GEMINI_MODEL = 'gemini-1.5-flash';
+
   try {
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestBody),
+        signal: AbortSignal.timeout(25000),
       }
     );
 
     if (!response.ok) {
       const errText = await response.text();
       console.error('[word-chat] Gemini API error:', response.status, errText);
+
+      // Return the real error in the response so it's visible in the UI during debugging
+      let friendlyError = 'Unable to get a response at this time. Please try again.';
+      try {
+        const errJson = JSON.parse(errText);
+        const msg = errJson?.error?.message;
+        if (msg) friendlyError = `Gemini error: ${msg}`;
+      } catch { /* ignore parse failure */ }
+
       return NextResponse.json({
-        content:
-          messages.length === 0
-            ? getFallbackDefinition(word)
-            : 'Unable to get a response at this time. Please try again.',
+        content: messages.length === 0 ? getFallbackDefinition(word) : friendlyError,
       });
     }
 
@@ -128,14 +138,24 @@ Guidelines:
     const content: string =
       data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
 
+    if (!content) {
+      console.error('[word-chat] Gemini returned empty content:', JSON.stringify(data));
+      return NextResponse.json({
+        content: messages.length === 0 ? getFallbackDefinition(word) : 'Empty response from AI.',
+      });
+    }
+
     return NextResponse.json({ content });
   } catch (err) {
     console.error('[word-chat] Fetch error:', err);
+    const isTimeout = err instanceof Error && err.name === 'TimeoutError';
     return NextResponse.json({
       content:
         messages.length === 0
           ? getFallbackDefinition(word)
-          : 'Unable to get a response at this time. Please try again.',
+          : isTimeout
+          ? 'Request timed out — please try again.'
+          : 'Network error — please try again.',
     });
   }
 }

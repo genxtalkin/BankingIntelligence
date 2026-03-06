@@ -14,10 +14,16 @@ interface WordChatRequest {
   messages: ChatMessage[];
 }
 
+// Gemini uses 'model' instead of 'assistant'
+interface GeminiPart { text: string }
+interface GeminiContent { role: 'user' | 'model'; parts: GeminiPart[] }
+
+const GEMINI_MODEL = 'gemini-1.5-flash';
+
 // Fallback definitions when no API key is available
 const FALLBACK_DEFINITIONS: Record<string, string> = {
   ransomware:
-    'Ransomware is malicious software that encrypts a victim\'s files, demanding payment for the decryption key. Financial institutions are prime targets due to the sensitivity of their data and pressure to restore operations quickly.',
+    "Ransomware is malicious software that encrypts a victim's files, demanding payment for the decryption key. Financial institutions are prime targets due to the sensitivity of their data and pressure to restore operations quickly.",
   phishing:
     'Phishing is a cyberattack where criminals impersonate trusted entities via email, SMS, or fake websites to steal credentials or financial information. Banking phishing often mimics legitimate institutions to capture login credentials.',
   skimming:
@@ -31,7 +37,7 @@ const FALLBACK_DEFINITIONS: Record<string, string> = {
   robbery:
     'Bank robbery is the physical theft of money or assets from a financial institution. Modern bank robberies often involve armed perpetrators, though cyber-enabled robbery (wire fraud, unauthorized transfers) is increasingly common.',
   jackpotting:
-    'ATM jackpotting is a sophisticated attack where criminals install malware or use hardware to force ATMs to dispense cash on demand. The technique requires either physical access to the ATM or compromising the network it\'s connected to.',
+    "ATM jackpotting is a sophisticated attack where criminals install malware or use hardware to force ATMs to dispense cash on demand. The technique requires either physical access to the ATM or compromising the network it's connected to.",
   hack:
     'Hacking in the financial context refers to unauthorized access to banking systems, networks, or applications. Sophisticated threat actors may exploit software vulnerabilities, stolen credentials, or social engineering to gain access.',
   cyber:
@@ -54,15 +60,14 @@ export async function POST(req: NextRequest) {
   const body: WordChatRequest = await req.json();
   const { word, category, frequency, messages } = body;
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY;
 
-  // If no API key, return fallback definition for first message
   if (!apiKey) {
     if (messages.length === 0) {
       return NextResponse.json({ content: getFallbackDefinition(word) });
     }
     return NextResponse.json({
-      content: 'AI chat is not configured. Please set the ANTHROPIC_API_KEY environment variable to enable this feature.',
+      content: 'AI chat is not configured — GEMINI_API_KEY is not set in environment variables.',
     });
   }
 
@@ -78,65 +83,77 @@ Guidelines:
 - Do not repeat the word's definition if the conversation has already covered it`;
 
   // If no prior messages, inject the initial definition request
-  const conversationMessages: ChatMessage[] =
+  const baseMessages: ChatMessage[] =
     messages.length === 0
       ? [{ role: 'user', content: `Provide a concise definition and banking-specific context for: "${word}"` }]
       : messages;
 
+  // Convert to Gemini format: 'assistant' → 'model'
+  const geminiContents: GeminiContent[] = baseMessages.map((m) => ({
+    role: m.role === 'assistant' ? 'model' : 'user',
+    parts: [{ text: m.content }],
+  }));
+
+  const requestBody = {
+    system_instruction: { parts: [{ text: systemPrompt }] },
+    contents: geminiContents,
+    generationConfig: { maxOutputTokens: 512, temperature: 0.4 },
+  };
+
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 512,
-        system: systemPrompt,
-        messages: conversationMessages,
-      }),
-      signal: AbortSignal.timeout(25000),
-    });
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody),
+        signal: AbortSignal.timeout(25000),
+      }
+    );
+
+    const responseText = await response.text();
 
     if (!response.ok) {
-      const errText = await response.text();
-      console.error('[word-chat] Anthropic API error:', response.status, errText);
-
-      let friendlyError = 'Unable to get a response at this time. Please try again.';
+      // Parse and surface the real Google error so it's visible in the UI
+      let errorDetail = `HTTP ${response.status}`;
       try {
-        const errJson = JSON.parse(errText);
+        const errJson = JSON.parse(responseText);
         const msg = errJson?.error?.message;
-        if (msg) friendlyError = `API error: ${msg}`;
-      } catch { /* ignore parse failure */ }
+        const status = errJson?.error?.status;
+        if (msg) errorDetail = status ? `${status}: ${msg}` : msg;
+      } catch { /* keep the HTTP status fallback */ }
 
+      console.error(`[word-chat] Gemini error: ${errorDetail}`);
       return NextResponse.json({
-        content: messages.length === 0 ? getFallbackDefinition(word) : friendlyError,
+        content: messages.length === 0
+          ? getFallbackDefinition(word)
+          : `Gemini API error — ${errorDetail}`,
       });
     }
 
-    const data = await response.json();
-    const content: string = data?.content?.[0]?.text ?? '';
+    const data = JSON.parse(responseText);
+    const content: string = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
 
     if (!content) {
-      console.error('[word-chat] Anthropic returned empty content:', JSON.stringify(data));
+      const reason = data?.candidates?.[0]?.finishReason ?? 'unknown';
+      console.error(`[word-chat] Gemini empty response, finishReason: ${reason}`);
       return NextResponse.json({
-        content: messages.length === 0 ? getFallbackDefinition(word) : 'Empty response from AI.',
+        content: messages.length === 0
+          ? getFallbackDefinition(word)
+          : `Empty response from Gemini (finishReason: ${reason}). Please try again.`,
       });
     }
 
     return NextResponse.json({ content });
   } catch (err) {
-    console.error('[word-chat] Fetch error:', err);
     const isTimeout = err instanceof Error && err.name === 'TimeoutError';
+    console.error('[word-chat] Fetch error:', err);
     return NextResponse.json({
-      content:
-        messages.length === 0
-          ? getFallbackDefinition(word)
-          : isTimeout
+      content: messages.length === 0
+        ? getFallbackDefinition(word)
+        : isTimeout
           ? 'Request timed out — please try again.'
-          : 'Network error — please try again.',
+          : 'Network error reaching Gemini — please try again.',
     });
   }
 }

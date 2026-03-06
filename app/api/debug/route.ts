@@ -17,6 +17,8 @@ export async function GET() {
     SUPABASE_SERVICE_ROLE_KEY: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
     NEWSCATCHER_API_KEY: !!process.env.NEWSCATCHER_API_KEY,
     CRON_SECRET: !!process.env.CRON_SECRET,
+    GEMINI_API_KEY: !!process.env.GEMINI_API_KEY,
+    ANTHROPIC_API_KEY: !!process.env.ANTHROPIC_API_KEY,
   };
 
   // ── 2. Supabase write test ────────────────────────────────────────────────────
@@ -84,6 +86,44 @@ export async function GET() {
     };
   } catch (e) {
     report.dbCounts = { error: String(e) };
+  }
+
+  // ── 6. Gemini API live test ───────────────────────────────────────────────────
+  const geminiKey = process.env.GEMINI_API_KEY;
+  if (!geminiKey) {
+    report.gemini = { ok: false, error: 'GEMINI_API_KEY env var not set' };
+  } else {
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ role: 'user', parts: [{ text: 'Reply with only the word: OK' }] }],
+            generationConfig: { maxOutputTokens: 5 },
+          }),
+          signal: AbortSignal.timeout(10000),
+        }
+      );
+      const text = await res.text();
+      if (!res.ok) {
+        let detail = `HTTP ${res.status}`;
+        try {
+          const j = JSON.parse(text);
+          const msg = j?.error?.message;
+          const status = j?.error?.status;
+          if (msg) detail = status ? `${status}: ${msg}` : msg;
+        } catch { /* keep HTTP status */ }
+        report.gemini = { ok: false, httpStatus: res.status, error: detail };
+      } else {
+        const data = JSON.parse(text);
+        const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+        report.gemini = { ok: true, reply: reply.trim() };
+      }
+    } catch (e) {
+      report.gemini = { ok: false, error: String(e) };
+    }
   }
 
   return NextResponse.json(report, { status: 200 });

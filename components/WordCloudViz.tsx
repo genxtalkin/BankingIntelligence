@@ -7,6 +7,7 @@ interface Props {
   words: WordFrequency[];
   width?: number;
   height?: number;
+  onWordClick?: (word: WordFrequency) => void;
 }
 
 interface PlacedWord {
@@ -30,7 +31,7 @@ function getColor(category: string, index: number): string {
   return palette[index % palette.length];
 }
 
-export default function WordCloudViz({ words, width = 900, height = 520 }: Props) {
+export default function WordCloudViz({ words, width = 900, height = 520, onWordClick }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [placed, setPlaced] = useState<PlacedWord[]>([]);
   const [tooltip, setTooltip] = useState<{ word: string; freq: number; x: number; y: number } | null>(null);
@@ -126,20 +127,26 @@ export default function WordCloudViz({ words, width = 900, height = 520 }: Props
     }
   }, [placed, width, height]);
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const getHitWord = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas) return null;
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
     const mx = (e.clientX - rect.left) * scaleX;
     const my = (e.clientY - rect.top) * scaleY;
-
-    const hit = placed.find((pw) => {
+    return placed.find((pw) => {
       const hw = pw.word.length * pw.size * 0.55 / 2;
       const hh = pw.size * 0.6;
       return mx >= pw.x - hw && mx <= pw.x + hw && my >= pw.y - hh && my <= pw.y + hh;
-    });
+    }) ?? null;
+  };
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const hit = getHitWord(e);
 
     if (hit) {
       const original = words.find((w) => w.word === hit.word);
@@ -156,6 +163,15 @@ export default function WordCloudViz({ words, width = 900, height = 520 }: Props
     }
   };
 
+  const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!onWordClick) return;
+    const hit = getHitWord(e);
+    if (hit) {
+      const original = words.find((w) => w.word === hit.word);
+      if (original) onWordClick(original);
+    }
+  };
+
   return (
     <div className="relative w-full">
       <canvas
@@ -164,6 +180,7 @@ export default function WordCloudViz({ words, width = 900, height = 520 }: Props
         height={height}
         onMouseMove={handleMouseMove}
         onMouseLeave={() => setTooltip(null)}
+        onClick={handleClick}
         className="w-full rounded-xl border border-verint-purple-pale bg-white shadow-verint"
         style={{ maxHeight: '520px', objectFit: 'contain' }}
       />

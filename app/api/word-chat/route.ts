@@ -14,6 +14,10 @@ interface WordChatRequest {
   messages: ChatMessage[];
 }
 
+// Gemini uses 'model' instead of 'assistant'
+interface GeminiPart { text: string }
+interface GeminiContent { role: 'user' | 'model'; parts: GeminiPart[] }
+
 // Fallback definitions when no API key is available
 const FALLBACK_DEFINITIONS: Record<string, string> = {
   ransomware:
@@ -47,25 +51,22 @@ const FALLBACK_DEFINITIONS: Record<string, string> = {
 function getFallbackDefinition(word: string): string {
   const lower = word.toLowerCase();
   if (FALLBACK_DEFINITIONS[lower]) return FALLBACK_DEFINITIONS[lower];
-  return `"${word}" is a term appearing frequently in banking security and financial crime intelligence feeds. It relates to threats or incidents monitored across financial institutions. Click the chat below to ask specific questions about this topic.`;
+  return `"${word}" is a term appearing frequently in banking security and financial crime intelligence feeds. It relates to threats or incidents monitored across financial institutions. Use the chat below to ask specific questions about this topic.`;
 }
 
 export async function POST(req: NextRequest) {
   const body: WordChatRequest = await req.json();
   const { word, category, frequency, messages } = body;
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY;
 
   // If no API key, return fallback definition for first message
   if (!apiKey) {
     if (messages.length === 0) {
-      return NextResponse.json({
-        content: getFallbackDefinition(word),
-      });
+      return NextResponse.json({ content: getFallbackDefinition(word) });
     }
     return NextResponse.json({
-      content:
-        'AI chat is not configured. Please set the ANTHROPIC_API_KEY environment variable to enable this feature.',
+      content: 'AI chat is not configured. Please set the GEMINI_API_KEY environment variable to enable this feature.',
     });
   }
 
@@ -80,37 +81,40 @@ Guidelines:
 - When relevant, mention detection, prevention, or response considerations
 - Do not repeat the word's definition if the conversation has already covered it`;
 
-  // Build the conversation — if no prior messages, generate a definition
-  const conversationMessages: ChatMessage[] =
+  // Build conversation for Gemini — convert 'assistant' → 'model'
+  // If no prior messages, inject the initial definition request
+  const baseMessages: ChatMessage[] =
     messages.length === 0
-      ? [
-          {
-            role: 'user',
-            content: `Provide a concise definition and banking-specific context for: "${word}"`,
-          },
-        ]
+      ? [{ role: 'user', content: `Provide a concise definition and banking-specific context for: "${word}"` }]
       : messages;
 
+  const geminiContents: GeminiContent[] = baseMessages.map((m) => ({
+    role: m.role === 'assistant' ? 'model' : 'user',
+    parts: [{ text: m.content }],
+  }));
+
+  const requestBody = {
+    system_instruction: { parts: [{ text: systemPrompt }] },
+    contents: geminiContents,
+    generationConfig: {
+      maxOutputTokens: 512,
+      temperature: 0.4,
+    },
+  };
+
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 512,
-        system: systemPrompt,
-        messages: conversationMessages,
-      }),
-    });
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody),
+      }
+    );
 
     if (!response.ok) {
       const errText = await response.text();
-      console.error('[word-chat] Anthropic API error:', response.status, errText);
-      // Fall back to hardcoded definition on API error
+      console.error('[word-chat] Gemini API error:', response.status, errText);
       return NextResponse.json({
         content:
           messages.length === 0
@@ -120,7 +124,9 @@ Guidelines:
     }
 
     const data = await response.json();
-    const content = data.content?.[0]?.text ?? '';
+    // Gemini response shape: candidates[0].content.parts[0].text
+    const content: string =
+      data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
 
     return NextResponse.json({ content });
   } catch (err) {

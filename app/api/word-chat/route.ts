@@ -14,10 +14,6 @@ interface WordChatRequest {
   messages: ChatMessage[];
 }
 
-// Gemini uses 'model' instead of 'assistant'
-interface GeminiPart { text: string }
-interface GeminiContent { role: 'user' | 'model'; parts: GeminiPart[] }
-
 // Fallback definitions when no API key is available
 const FALLBACK_DEFINITIONS: Record<string, string> = {
   ransomware:
@@ -58,7 +54,7 @@ export async function POST(req: NextRequest) {
   const body: WordChatRequest = await req.json();
   const { word, category, frequency, messages } = body;
 
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.ANTHROPIC_API_KEY;
 
   // If no API key, return fallback definition for first message
   if (!apiKey) {
@@ -66,7 +62,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ content: getFallbackDefinition(word) });
     }
     return NextResponse.json({
-      content: 'AI chat is not configured. Please set the GEMINI_API_KEY environment variable to enable this feature.',
+      content: 'AI chat is not configured. Please set the ANTHROPIC_API_KEY environment variable to enable this feature.',
     });
   }
 
@@ -81,51 +77,38 @@ Guidelines:
 - When relevant, mention detection, prevention, or response considerations
 - Do not repeat the word's definition if the conversation has already covered it`;
 
-  // Build conversation for Gemini — convert 'assistant' → 'model'
   // If no prior messages, inject the initial definition request
-  const baseMessages: ChatMessage[] =
+  const conversationMessages: ChatMessage[] =
     messages.length === 0
       ? [{ role: 'user', content: `Provide a concise definition and banking-specific context for: "${word}"` }]
       : messages;
 
-  const geminiContents: GeminiContent[] = baseMessages.map((m) => ({
-    role: m.role === 'assistant' ? 'model' : 'user',
-    parts: [{ text: m.content }],
-  }));
-
-  const requestBody = {
-    system_instruction: { parts: [{ text: systemPrompt }] },
-    contents: geminiContents,
-    generationConfig: {
-      maxOutputTokens: 512,
-      temperature: 0.4,
-    },
-  };
-
-  // gemini-1.5-flash is universally available on all API key tiers
-  const GEMINI_MODEL = 'gemini-1.5-flash';
-
   try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody),
-        signal: AbortSignal.timeout(25000),
-      }
-    );
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 512,
+        system: systemPrompt,
+        messages: conversationMessages,
+      }),
+      signal: AbortSignal.timeout(25000),
+    });
 
     if (!response.ok) {
       const errText = await response.text();
-      console.error('[word-chat] Gemini API error:', response.status, errText);
+      console.error('[word-chat] Anthropic API error:', response.status, errText);
 
-      // Return the real error in the response so it's visible in the UI during debugging
       let friendlyError = 'Unable to get a response at this time. Please try again.';
       try {
         const errJson = JSON.parse(errText);
         const msg = errJson?.error?.message;
-        if (msg) friendlyError = `Gemini error: ${msg}`;
+        if (msg) friendlyError = `API error: ${msg}`;
       } catch { /* ignore parse failure */ }
 
       return NextResponse.json({
@@ -134,12 +117,10 @@ Guidelines:
     }
 
     const data = await response.json();
-    // Gemini response shape: candidates[0].content.parts[0].text
-    const content: string =
-      data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+    const content: string = data?.content?.[0]?.text ?? '';
 
     if (!content) {
-      console.error('[word-chat] Gemini returned empty content:', JSON.stringify(data));
+      console.error('[word-chat] Anthropic returned empty content:', JSON.stringify(data));
       return NextResponse.json({
         content: messages.length === 0 ? getFallbackDefinition(word) : 'Empty response from AI.',
       });

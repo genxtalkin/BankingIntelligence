@@ -49,14 +49,15 @@ After your first deployment, go to:
 
 Add ALL of these:
 
-| Variable | Value |
+| Variable | Where to find it |
 |---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | `https://muvsviqavceualumvdbx.supabase.co` |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | `<your-supabase-anon-key>` |
-| `SUPABASE_SERVICE_ROLE_KEY` | `<your-supabase-service-role-key>` |
-| `NEWSCATCHER_API_KEY` | `<your-newscatcher-api-key>` |
-| `RESEND_API_KEY` | `<your-resend-api-key>` |
-| `ADMIN_EMAIL` | `genxtalkin@gmail.com` |
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase Dashboard → Project Settings → API → Project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase Dashboard → Project Settings → API → anon public key |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase Dashboard → Project Settings → API → service_role secret key |
+| `NEWSCATCHER_API_KEY` | NewscatcherAPI dashboard → API Keys |
+| `RESEND_API_KEY` | Resend dashboard → API Keys |
+| `GEMINI_API_KEY` | Google AI Studio → API Keys |
+| `ADMIN_EMAIL` | The email address that receives approval notifications |
 | `CRON_SECRET` | Generate any random string (e.g. `openssl rand -hex 32`) |
 | `NEXT_PUBLIC_APP_URL` | Your Vercel URL (e.g. `https://verint-fi-intel.vercel.app`) |
 

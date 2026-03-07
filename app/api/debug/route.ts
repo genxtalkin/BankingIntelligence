@@ -88,41 +88,92 @@ export async function GET() {
     report.dbCounts = { error: String(e) };
   }
 
-  // ── 6. Gemini API live test ───────────────────────────────────────────────────
+  // ── 6. Gemini: list available models for this key ────────────────────────────
   const geminiKey = process.env.GEMINI_API_KEY;
   if (!geminiKey) {
     report.gemini = { ok: false, error: 'GEMINI_API_KEY env var not set' };
   } else {
+    // First: fetch which models this key actually supports
+    let availableModels: string[] = [];
     try {
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ role: 'user', parts: [{ text: 'Reply with only the word: OK' }] }],
-            generationConfig: { maxOutputTokens: 5 },
-          }),
-          signal: AbortSignal.timeout(10000),
-        }
+      const listRes = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models?key=${geminiKey}`,
+        { signal: AbortSignal.timeout(8000) }
       );
-      const text = await res.text();
-      if (!res.ok) {
-        let detail = `HTTP ${res.status}`;
-        try {
-          const j = JSON.parse(text);
-          const msg = j?.error?.message;
-          const status = j?.error?.status;
-          if (msg) detail = status ? `${status}: ${msg}` : msg;
-        } catch { /* keep HTTP status */ }
-        report.gemini = { ok: false, httpStatus: res.status, error: detail };
+      const listText = await listRes.text();
+      if (listRes.ok) {
+        const listData = JSON.parse(listText);
+        availableModels = (listData.models ?? [])
+          .filter((m: { supportedGenerationMethods?: string[] }) =>
+            m.supportedGenerationMethods?.includes('generateContent')
+          )
+          .map((m: { name: string }) => m.name.replace('models/', ''));
       } else {
-        const data = JSON.parse(text);
-        const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
-        report.gemini = { ok: true, reply: reply.trim() };
+        const j = JSON.parse(listText);
+        report.gemini = {
+          ok: false,
+          error: `ListModels failed: ${j?.error?.status ?? ''}: ${j?.error?.message ?? listText}`,
+        };
       }
     } catch (e) {
-      report.gemini = { ok: false, error: String(e) };
+      report.gemini = { ok: false, error: `ListModels fetch error: ${String(e)}` };
+    }
+
+    if (availableModels.length > 0) {
+      // Pick the best available model: prefer gemini-2.0-flash, then 1.5-flash variants
+      const preferred = [
+        'gemini-2.0-flash',
+        'gemini-2.0-flash-lite',
+        'gemini-1.5-flash-latest',
+        'gemini-1.5-flash-001',
+        'gemini-1.5-flash-002',
+        'gemini-1.5-flash',
+        'gemini-1.5-pro-latest',
+        'gemini-pro',
+      ];
+      const modelToUse = preferred.find((m) => availableModels.includes(m)) ?? availableModels[0];
+
+      // Now do a live generateContent test with that model
+      try {
+        const testRes = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${modelToUse}:generateContent?key=${geminiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ role: 'user', parts: [{ text: 'Reply with only the word: OK' }] }],
+              generationConfig: { maxOutputTokens: 5 },
+            }),
+            signal: AbortSignal.timeout(10000),
+          }
+        );
+        const testText = await testRes.text();
+        if (!testRes.ok) {
+          const j = JSON.parse(testText);
+          report.gemini = {
+            ok: false,
+            availableModels,
+            testedModel: modelToUse,
+            error: `${j?.error?.status ?? 'ERROR'}: ${j?.error?.message ?? testText}`,
+          };
+        } else {
+          const data = JSON.parse(testText);
+          const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+          report.gemini = {
+            ok: true,
+            availableModels,
+            workingModel: modelToUse,
+            reply: reply.trim(),
+          };
+        }
+      } catch (e) {
+        report.gemini = {
+          ok: false,
+          availableModels,
+          testedModel: modelToUse,
+          error: String(e),
+        };
+      }
     }
   }
 

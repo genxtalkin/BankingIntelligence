@@ -120,15 +120,15 @@ export async function GET() {
     }
 
     if (availableModels.length > 0) {
-      // Pick the best available model: prefer gemini-2.0-flash, then 1.5-flash variants
+      // gemini-2.0-flash is excluded — deprecated/unavailable for new API keys
       const preferred = [
-        'gemini-2.0-flash',
         'gemini-2.0-flash-lite',
         'gemini-1.5-flash-latest',
         'gemini-1.5-flash-001',
         'gemini-1.5-flash-002',
         'gemini-1.5-flash',
         'gemini-1.5-pro-latest',
+        'gemini-1.5-pro-001',
         'gemini-pro',
       ];
       const modelToUse = preferred.find((m) => availableModels.includes(m)) ?? availableModels[0];

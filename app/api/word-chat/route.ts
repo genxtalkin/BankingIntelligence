@@ -18,15 +18,16 @@ interface WordChatRequest {
 interface GeminiPart { text: string }
 interface GeminiContent { role: 'user' | 'model'; parts: GeminiPart[] }
 
-// Ordered preference list — first one found wins
+// Ordered preference list — first one found wins.
+// gemini-2.0-flash is intentionally excluded: deprecated for new API keys (NOT_FOUND error).
 const PREFERRED_MODELS = [
-  'gemini-2.0-flash',
   'gemini-2.0-flash-lite',
   'gemini-1.5-flash-latest',
   'gemini-1.5-flash-001',
   'gemini-1.5-flash-002',
   'gemini-1.5-flash',
   'gemini-1.5-pro-latest',
+  'gemini-1.5-pro-001',
   'gemini-pro',
 ];
 
@@ -50,6 +51,7 @@ async function resolveModel(apiKey: string): Promise<string> {
         )
         .map((m: { name: string }) => m.name.replace('models/', ''));
 
+      console.log('[word-chat] Available Gemini models:', available);
       const best = PREFERRED_MODELS.find((m) => available.includes(m)) ?? available[0];
       if (best) {
         cachedModel = best;
@@ -61,8 +63,13 @@ async function resolveModel(apiKey: string): Promise<string> {
     // fall through to default
   }
 
-  // Fallback if ListModels fails — will surface a clear error from generateContent
-  return 'gemini-2.0-flash';
+  // Fallback if ListModels fails
+  return 'gemini-1.5-flash-latest';
+}
+
+// Call this when a model returns NOT_FOUND so the next request re-discovers
+function invalidateModelCache(): void {
+  cachedModel = null;
 }
 
 // Fallback definitions when no API key is available
@@ -163,18 +170,28 @@ Guidelines:
     if (!response.ok) {
       // Parse and surface the real Google error so it's visible in the UI
       let errorDetail = `HTTP ${response.status}`;
+      let isNotFound = false;
       try {
         const errJson = JSON.parse(responseText);
         const msg = errJson?.error?.message;
         const status = errJson?.error?.status;
         if (msg) errorDetail = status ? `${status}: ${msg}` : msg;
+        if (status === 'NOT_FOUND') {
+          // Model no longer available for this key — clear cache so next call re-discovers
+          isNotFound = true;
+          invalidateModelCache();
+        }
       } catch { /* keep the HTTP status fallback */ }
 
-      console.error(`[word-chat] Gemini error: ${errorDetail}`);
+      console.error(`[word-chat] Gemini error (model: ${modelToUse}): ${errorDetail}`);
       return NextResponse.json({
-        content: messages.length === 0
+        content: isNotFound && messages.length === 0
           ? getFallbackDefinition(word)
-          : `Gemini API error — ${errorDetail}`,
+          : isNotFound
+            ? `Model ${modelToUse} is not available for this API key. Retrying with a different model on next request.`
+            : messages.length === 0
+              ? getFallbackDefinition(word)
+              : `Gemini API error — ${errorDetail}`,
       });
     }
 

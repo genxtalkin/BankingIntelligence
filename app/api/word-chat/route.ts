@@ -18,7 +18,52 @@ interface WordChatRequest {
 interface GeminiPart { text: string }
 interface GeminiContent { role: 'user' | 'model'; parts: GeminiPart[] }
 
-const GEMINI_MODEL = 'gemini-1.5-flash';
+// Ordered preference list — first one found wins
+const PREFERRED_MODELS = [
+  'gemini-2.0-flash',
+  'gemini-2.0-flash-lite',
+  'gemini-1.5-flash-latest',
+  'gemini-1.5-flash-001',
+  'gemini-1.5-flash-002',
+  'gemini-1.5-flash',
+  'gemini-1.5-pro-latest',
+  'gemini-pro',
+];
+
+// Resolves the best available model for this API key at call time.
+// Caches the result in module scope so we only call ListModels once per cold start.
+let cachedModel: string | null = null;
+
+async function resolveModel(apiKey: string): Promise<string> {
+  if (cachedModel) return cachedModel;
+
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`,
+      { signal: AbortSignal.timeout(8000) }
+    );
+    if (res.ok) {
+      const data = await res.json();
+      const available: string[] = (data.models ?? [])
+        .filter((m: { supportedGenerationMethods?: string[] }) =>
+          m.supportedGenerationMethods?.includes('generateContent')
+        )
+        .map((m: { name: string }) => m.name.replace('models/', ''));
+
+      const best = PREFERRED_MODELS.find((m) => available.includes(m)) ?? available[0];
+      if (best) {
+        cachedModel = best;
+        console.log(`[word-chat] Resolved Gemini model: ${best}`);
+        return best;
+      }
+    }
+  } catch {
+    // fall through to default
+  }
+
+  // Fallback if ListModels fails — will surface a clear error from generateContent
+  return 'gemini-2.0-flash';
+}
 
 // Fallback definitions when no API key is available
 const FALLBACK_DEFINITIONS: Record<string, string> = {
@@ -94,6 +139,8 @@ Guidelines:
     parts: [{ text: m.content }],
   }));
 
+  const modelToUse = await resolveModel(apiKey);
+
   const requestBody = {
     system_instruction: { parts: [{ text: systemPrompt }] },
     contents: geminiContents,
@@ -102,7 +149,7 @@ Guidelines:
 
   try {
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${modelToUse}:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

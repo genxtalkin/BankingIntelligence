@@ -162,7 +162,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* CTA */}
+      {/* CTA — hidden until login/signup is re-enabled
       <section className="py-12 px-4 bg-verint-gradient text-white text-center">
         <h2 className="text-2xl font-bold mb-3">Get Personalized Territory Reports</h2>
         <p className="text-verint-purple-pale mb-6 max-w-xl mx-auto text-sm">
@@ -177,6 +177,7 @@ export default function HomePage() {
           Request Access →
         </Link>
       </section>
+      */}
     </div>
   );
 }

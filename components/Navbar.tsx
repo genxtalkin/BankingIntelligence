@@ -106,39 +106,21 @@ export default function Navbar() {
               </button>
             </div>
 
-            {/* Auth section */}
-            <div className="hidden md:flex items-center gap-3">
-              {user ? (
-                <>
-                  <span className="text-verint-purple-pale text-xs truncate max-w-[140px]">
-                    {user.email}
-                  </span>
-                  <button
-                    onClick={handleLogout}
-                    className="bg-verint-purple hover:bg-verint-purple-light text-white text-sm font-medium
-                               px-4 py-2 rounded-lg transition-colors"
-                  >
-                    Sign Out
-                  </button>
-                </>
-              ) : (
-                <>
-                  <Link
-                    href="/auth/login"
-                    className="text-verint-purple-pale hover:text-white text-sm font-medium transition-colors"
-                  >
-                    Log In
-                  </Link>
-                  <Link
-                    href="/auth/signup"
-                    className="bg-white text-verint-purple hover:bg-verint-purple-pale font-semibold
-                               text-sm px-4 py-2 rounded-lg transition-colors shadow-md"
-                  >
-                    Sign Up
-                  </Link>
-                </>
-              )}
-            </div>
+            {/* Auth section — hidden until login is re-enabled */}
+            {user && (
+              <div className="hidden md:flex items-center gap-3">
+                <span className="text-verint-purple-pale text-xs truncate max-w-[140px]">
+                  {user.email}
+                </span>
+                <button
+                  onClick={handleLogout}
+                  className="bg-verint-purple hover:bg-verint-purple-light text-white text-sm font-medium
+                             px-4 py-2 rounded-lg transition-colors"
+                >
+                  Sign Out
+                </button>
+              </div>
+            )}
 
             {/* Mobile hamburger */}
             <button
@@ -190,31 +172,18 @@ export default function Navbar() {
               {refreshState === 'sent' ? '⏳ Refreshing…' : '↻ Refresh Data'}
             </button>
 
-            <div className="border-t border-verint-purple pt-3 mt-3 space-y-2">
-              {user ? (
-                <>
-                  <div className="text-verint-purple-pale text-xs px-4 truncate">{user.email}</div>
-                  <button
-                    onClick={() => { handleLogout(); setMenuOpen(false); }}
-                    className="block w-full text-left px-4 py-2.5 text-sm text-white bg-verint-purple rounded-lg"
-                  >
-                    Sign Out
-                  </button>
-                </>
-              ) : (
-                <>
-                  <Link href="/auth/login" onClick={() => setMenuOpen(false)}
-                    className="block px-4 py-2.5 text-sm text-verint-purple-pale">
-                    Log In
-                  </Link>
-                  <Link href="/auth/signup" onClick={() => setMenuOpen(false)}
-                    className="block px-4 py-2.5 text-sm bg-white text-verint-purple
-                               rounded-lg font-semibold text-center">
-                    Sign Up
-                  </Link>
-                </>
-              )}
-            </div>
+            {/* Auth section — hidden until login is re-enabled */}
+            {user && (
+              <div className="border-t border-verint-purple pt-3 mt-3 space-y-2">
+                <div className="text-verint-purple-pale text-xs px-4 truncate">{user.email}</div>
+                <button
+                  onClick={() => { handleLogout(); setMenuOpen(false); }}
+                  className="block w-full text-left px-4 py-2.5 text-sm text-white bg-verint-purple rounded-lg"
+                >
+                  Sign Out
+                </button>
+              </div>
+            )}
           </div>
         )}
       </nav>

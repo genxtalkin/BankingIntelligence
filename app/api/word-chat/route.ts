@@ -14,63 +14,7 @@ interface WordChatRequest {
   messages: ChatMessage[];
 }
 
-// Gemini uses 'model' instead of 'assistant'
-interface GeminiPart { text: string }
-interface GeminiContent { role: 'user' | 'model'; parts: GeminiPart[] }
-
-// Ordered preference list — first one found wins.
-// gemini-2.0-flash is intentionally excluded: deprecated for new API keys (NOT_FOUND error).
-const PREFERRED_MODELS = [
-  'gemini-2.0-flash-lite',
-  'gemini-1.5-flash-latest',
-  'gemini-1.5-flash-001',
-  'gemini-1.5-flash-002',
-  'gemini-1.5-flash',
-  'gemini-1.5-pro-latest',
-  'gemini-1.5-pro-001',
-  'gemini-pro',
-];
-
-// Resolves the best available model for this API key at call time.
-// Caches the result in module scope so we only call ListModels once per cold start.
-let cachedModel: string | null = null;
-
-async function resolveModel(apiKey: string): Promise<string> {
-  if (cachedModel) return cachedModel;
-
-  try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`,
-      { signal: AbortSignal.timeout(8000) }
-    );
-    if (res.ok) {
-      const data = await res.json();
-      const available: string[] = (data.models ?? [])
-        .filter((m: { supportedGenerationMethods?: string[] }) =>
-          m.supportedGenerationMethods?.includes('generateContent')
-        )
-        .map((m: { name: string }) => m.name.replace('models/', ''));
-
-      console.log('[word-chat] Available Gemini models:', available);
-      const best = PREFERRED_MODELS.find((m) => available.includes(m)) ?? available[0];
-      if (best) {
-        cachedModel = best;
-        console.log(`[word-chat] Resolved Gemini model: ${best}`);
-        return best;
-      }
-    }
-  } catch {
-    // fall through to default
-  }
-
-  // Fallback if ListModels fails
-  return 'gemini-1.5-flash-latest';
-}
-
-// Call this when a model returns NOT_FOUND so the next request re-discovers
-function invalidateModelCache(): void {
-  cachedModel = null;
-}
+const ANTHROPIC_MODEL = 'claude-haiku-4-5-20251001';
 
 // Fallback definitions when no API key is available
 const FALLBACK_DEFINITIONS: Record<string, string> = {
@@ -112,14 +56,14 @@ export async function POST(req: NextRequest) {
   const body: WordChatRequest = await req.json();
   const { word, category, frequency, messages } = body;
 
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.ANTHROPIC_API_KEY;
 
   if (!apiKey) {
     if (messages.length === 0) {
       return NextResponse.json({ content: getFallbackDefinition(word) });
     }
     return NextResponse.json({
-      content: 'AI chat is not configured — GEMINI_API_KEY is not set in environment variables.',
+      content: 'AI chat is not configured — ANTHROPIC_API_KEY is not set in environment variables.',
     });
   }
 
@@ -140,71 +84,53 @@ Guidelines:
       ? [{ role: 'user', content: `Provide a concise definition and banking-specific context for: "${word}"` }]
       : messages;
 
-  // Convert to Gemini format: 'assistant' → 'model'
-  const geminiContents: GeminiContent[] = baseMessages.map((m) => ({
-    role: m.role === 'assistant' ? 'model' : 'user',
-    parts: [{ text: m.content }],
-  }));
-
-  const modelToUse = await resolveModel(apiKey);
-
   const requestBody = {
-    system_instruction: { parts: [{ text: systemPrompt }] },
-    contents: geminiContents,
-    generationConfig: { maxOutputTokens: 512, temperature: 0.4 },
+    model: ANTHROPIC_MODEL,
+    max_tokens: 512,
+    temperature: 0.4,
+    system: systemPrompt,
+    messages: baseMessages,
   };
 
   try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${modelToUse}:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody),
-        signal: AbortSignal.timeout(25000),
-      }
-    );
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify(requestBody),
+      signal: AbortSignal.timeout(25000),
+    });
 
     const responseText = await response.text();
 
     if (!response.ok) {
-      // Parse and surface the real Google error so it's visible in the UI
       let errorDetail = `HTTP ${response.status}`;
-      let isNotFound = false;
       try {
         const errJson = JSON.parse(responseText);
         const msg = errJson?.error?.message;
-        const status = errJson?.error?.status;
-        if (msg) errorDetail = status ? `${status}: ${msg}` : msg;
-        if (status === 'NOT_FOUND') {
-          // Model no longer available for this key — clear cache so next call re-discovers
-          isNotFound = true;
-          invalidateModelCache();
-        }
-      } catch { /* keep the HTTP status fallback */ }
+        if (msg) errorDetail = msg;
+      } catch { /* keep HTTP status fallback */ }
 
-      console.error(`[word-chat] Gemini error (model: ${modelToUse}): ${errorDetail}`);
+      console.error(`[word-chat] Anthropic error: ${errorDetail}`);
       return NextResponse.json({
-        content: isNotFound && messages.length === 0
+        content: messages.length === 0
           ? getFallbackDefinition(word)
-          : isNotFound
-            ? `Model ${modelToUse} is not available for this API key. Retrying with a different model on next request.`
-            : messages.length === 0
-              ? getFallbackDefinition(word)
-              : `Gemini API error — ${errorDetail}`,
+          : `AI error — ${errorDetail}`,
       });
     }
 
     const data = JSON.parse(responseText);
-    const content: string = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+    const content: string = data?.content?.[0]?.text ?? '';
 
     if (!content) {
-      const reason = data?.candidates?.[0]?.finishReason ?? 'unknown';
-      console.error(`[word-chat] Gemini empty response, finishReason: ${reason}`);
+      console.error('[word-chat] Anthropic empty response');
       return NextResponse.json({
         content: messages.length === 0
           ? getFallbackDefinition(word)
-          : `Empty response from Gemini (finishReason: ${reason}). Please try again.`,
+          : 'Empty response from AI. Please try again.',
       });
     }
 
@@ -217,7 +143,7 @@ Guidelines:
         ? getFallbackDefinition(word)
         : isTimeout
           ? 'Request timed out — please try again.'
-          : 'Network error reaching Gemini — please try again.',
+          : 'Network error reaching AI — please try again.',
     });
   }
 }
